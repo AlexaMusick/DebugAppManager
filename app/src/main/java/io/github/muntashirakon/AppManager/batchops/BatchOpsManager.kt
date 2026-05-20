@@ -153,9 +153,35 @@ class BatchOpsManager(private val mLogger: Logger?, private val mProgressHandler
             OP_UNBLOCK_TRACKERS -> opUnblockTrackers(info)
             OP_UNINSTALL -> opUninstall(info)
             OP_DEXOPT -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) opPerformDexOpt(info) else Result(info.pairList, false)
-            OP_ARCHIVE -> ArchiveHandler.opArchive(info, mProgressHandler, mLogger, ArchiveHandler.MODE_AUTO)
+            OP_ARCHIVE -> {
+                val mode = (info.options as? BatchArchiveOptions)?.mode ?: ArchiveHandler.MODE_AUTO
+                ArchiveHandler.opArchive(info, mProgressHandler, mLogger, mode)
+            }
+            OP_EDIT_TAGS -> opEditTags(info)
             else -> Result(info.pairList, false)
         }
+    }
+
+    private fun opEditTags(info: BatchOpsInfo): Result {
+        val failedPackages = mutableListOf<UserPackagePair>()
+        val lastProgress = mProgressHandler?.lastProgress ?: 0f
+        val tags = (info.options as? BatchTagOptions)?.tags
+        val appDao = AppsDb.getInstance().appDao()
+        for (i in 0 until info.size) {
+            updateProgress(lastProgress, i + 1)
+            val pair = info.getPair(i)
+            try {
+                val app = appDao.getByPackageNameSync(pair.packageName, pair.userId)
+                if (app != null) {
+                    app.tags = tags
+                    appDao.insert(app)
+                }
+            } catch (e: Exception) {
+                log("====> op=EDIT_TAGS, pkg=$pair", e)
+                failedPackages.add(pair)
+            }
+        }
+        return Result(failedPackages)
     }
 
     private fun opBackupApk(info: BatchOpsInfo): Result {

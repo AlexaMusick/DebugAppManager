@@ -69,12 +69,11 @@
         app:menu="@menu/activity_main_actions"
         tools:menu="@menu/activity_main_actions" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:src="@drawable/ic_search"
-        app:layout_anchor="@id/bottom_app_bar" />
+    <io.github.muntashirakon.AppManager.view.FabMenu
+        android:id="@+id/fab_menu"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:elevation="12dp" />
 
     <io.github.muntashirakon.AppManager.misc.AdvancedSearchView
         android:id="@+id/search_view"

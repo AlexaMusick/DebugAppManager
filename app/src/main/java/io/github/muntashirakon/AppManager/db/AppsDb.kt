@@ -14,7 +14,7 @@ import io.github.muntashirakon.AppManager.utils.ContextUtils
 
 @Database(
     entities = [App::class, LogFilter::class, Backup::class, OpHistory::class, FmFavorite::class, FreezeType::class, ArchivedApp::class],
-    version = 11
+    version = 12
 )
 @TypeConverters(Converters::class)
 abstract class AppsDb : RoomDatabase() {
@@ -94,12 +94,19 @@ abstract class AppsDb : RoomDatabase() {
             }
         }
 
+        @JvmField
+        val M_11_12: Migration = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `archived_apps` ADD COLUMN `tags` TEXT")
+            }
+        }
+
         @JvmStatic
         @Synchronized
         fun getInstance(): AppsDb {
             if (sAppsDb == null) {
                 sAppsDb = Room.databaseBuilder(ContextUtils.getContext(), AppsDb::class.java, "apps.db")
-                    .addMigrations(M_2_3, M_3_4, M_4_5, M_5_6, M_6_7, M_7_8, M_8_9, M_9_10, M_10_11)
+                    .addMigrations(M_2_3, M_3_4, M_4_5, M_5_6, M_6_7, M_7_8, M_8_9, M_9_10, M_10_11, M_11_12)
                     .fallbackToDestructiveMigrationOnDowngrade()
                     .build()
                 try {

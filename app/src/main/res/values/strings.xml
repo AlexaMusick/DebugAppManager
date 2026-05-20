@@ -1575,4 +1575,6 @@
     <string name="fab_menu_backup">Backup</string>
     <string name="fab_menu_freeze">Freeze</string>
     <string name="fab_menu_settings">Settings</string>
+    <string name="batch_archive_instruction">Select apps to archive. They are now sorted by size.</string>
+    <string name="archive_tags_hint">Tags (e.g. Food &amp; Drink, Games)</string>
 </resources>

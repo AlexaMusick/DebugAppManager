@@ -68,6 +68,12 @@ import io.github.muntashirakon.AppManager.utils.AppPref
 import io.github.muntashirakon.AppManager.utils.DateUtils
 import io.github.muntashirakon.AppManager.utils.StoragePermission
 import io.github.muntashirakon.AppManager.utils.UIUtils
+import io.github.muntashirakon.AppManager.utils.appearance.ExpressiveHaptics
+import io.github.muntashirakon.AppManager.utils.appearance.ExpressiveMotion
+import io.github.muntashirakon.AppManager.view.FabMenu
+import io.github.muntashirakon.AppManager.batchops.struct.BatchArchiveOptions
+import io.github.muntashirakon.AppManager.batchops.struct.BatchTagOptions
+import io.github.muntashirakon.AppManager.batchops.ArchiveHandler
 import io.github.muntashirakon.AppManager.utils.ThreadUtils
 import io.github.muntashirakon.dialog.AlertDialogBuilder
 import io.github.muntashirakon.dialog.ScrollableDialogBuilder
@@ -98,6 +104,7 @@ class MainActivity : BaseActivity(), AdvancedSearchView.OnQueryTextListener,
     private var mProgressIndicator: LinearProgressIndicator? = null
     private var mSwipeRefresh: SwipeRefreshLayout? = null
     private var mMultiSelectionView: MultiSelectionView? = null
+    private var mFabMenu: FabMenu? = null
     private var mBatchOpsHandler: MainBatchOpsHandler? = null
     private var mAppUsageMenu: MenuItem? = null
 
@@ -229,6 +236,9 @@ class MainActivity : BaseActivity(), AdvancedSearchView.OnQueryTextListener,
         mMultiSelectionView!!.updateCounter(true)
         mBatchOpsHandler = MainBatchOpsHandler(mMultiSelectionView!!, viewModel!!)
         mMultiSelectionView!!.setOnSelectionChangeListener(mBatchOpsHandler)
+
+        mFabMenu = findViewById(R.id.fab_menu)
+        setupFabMenu()
 
         if (SHOW_DISCLAIMER && AppPref.getBoolean(AppPref.PrefKey.PREF_SHOW_DISCLAIMER_BOOL)) {
             SHOW_DISCLAIMER = false
@@ -371,6 +381,50 @@ lifecycleScope.launch {
             startActivity(archivedAppsIntent)
         } else return super.onOptionsItemSelected(item)
         return true
+    }
+
+    private fun setupFabMenu() {
+        mFabMenu?.apply {
+            setMenuItems(listOf(
+                FabMenu.MenuItem(1, R.drawable.ic_archive, getString(R.string.fab_menu_archive)),
+                FabMenu.MenuItem(2, R.drawable.ic_clean, getString(R.string.fab_menu_clean_cache)),
+                FabMenu.MenuItem(3, R.drawable.ic_backup_restore, getString(R.string.fab_menu_backup)),
+                FabMenu.MenuItem(4, R.drawable.ic_snowflake, getString(R.string.fab_menu_freeze)),
+                FabMenu.MenuItem(5, R.drawable.ic_settings, getString(R.string.fab_menu_settings))
+            ))
+            setOnMenuItemClickListener { id ->
+                when (id) {
+                    1 -> startBatchArchiving()
+                    2 -> {
+                        val cacheCleanerIntent = Intent(this@MainActivity, CacheCleanerActivity::class.java)
+                        startActivity(cacheCleanerIntent)
+                    }
+                    3 -> handleBatchOp(BatchOpsManager.OP_BACKUP)
+                    4 -> showFreezeUnfreezeDialog(Prefs.Blocking.getDefaultFreezingMethod())
+                    5 -> {
+                        val settingsIntent = SettingsActivity.getSettingsIntent(this@MainActivity)
+                        startActivity(settingsIntent)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startBatchArchiving() {
+        // Sort by size
+        viewModel?.setSortBy(MainListOptions.SORT_BY_TOTAL_SIZE)
+        
+        // Enter selection mode
+        mAdapter?.setInSelectionMode(true)
+        mAdapter?.notifySelectionChange()
+        
+        // Show instruction snackbar with haptics
+        ExpressiveHaptics.performHapticFeedback(ExpressiveHaptics.HAPTIC_SUCCESS)
+        
+        Snackbar.make(findViewById(android.R.id.content), R.string.batch_archive_instruction, Snackbar.LENGTH_LONG)
+            .setAction(R.string.archive) {
+                showArchiveDialog(ArrayList(viewModel!!.getSelectedPackageUserPairs()))
+            }.show()
     }
 
     override fun onSelectionModeEnabled() {
@@ -606,11 +660,23 @@ lifecycleScope.launch {
             getString(R.string.archive_method_root),
             getString(R.string.archive_method_standard)
         )
+        var selectedMethod = 0
+        val view = View.inflate(this, R.layout.dialog_edit_tags, null)
+        val input: com.google.android.material.textfield.TextInputEditText = view.findViewById(R.id.tags_input)
+        input.setHint(R.string.archive_tags_hint)
+
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.choose_archive_method)
-            .setItems(methods) { _, which ->
-                val options = io.github.muntashirakon.AppManager.batchops.struct.BatchArchiveOptions(which)
+            .setView(view)
+            .setSingleChoiceItems(methods, selectedMethod) { _, which ->
+                selectedMethod = which
+                ExpressiveHaptics.performHapticFeedback(ExpressiveHaptics.HAPTIC_LIGHT)
+            }
+            .setPositiveButton(R.string.archive) { _, _ ->
+                val tags = input.text.toString().takeIf { it.isNotBlank() }
+                val options = BatchArchiveOptions(selectedMethod, tags)
                 handleBatchOp(BatchOpsManager.OP_ARCHIVE, options, pairs)
+                ExpressiveHaptics.performHapticFeedback(ExpressiveHaptics.HAPTIC_SUCCESS)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -625,7 +691,9 @@ lifecycleScope.launch {
             .setView(view)
             .setPositiveButton(R.string.apply) { _, _ ->
                 val tags = input.text.toString()
-                handleBatchOp(BatchOpsManager.OP_EDIT_TAGS, null, pairs, tags)
+                val options = BatchTagOptions(tags)
+                handleBatchOp(BatchOpsManager.OP_EDIT_TAGS, options, pairs)
+                ExpressiveHaptics.performHapticFeedback(ExpressiveHaptics.HAPTIC_SUCCESS)
             }
             .setNegativeButton(R.string.cancel, null)
             .show()

@@ -2,8 +2,14 @@
 
 package io.github.muntashirakon.AppManager.batchops
 
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.IPackageDeleteObserver2
+import android.content.pm.IPackageManager
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.IBinder
 import io.github.muntashirakon.AppManager.db.AppsDb
 import io.github.muntashirakon.AppManager.db.entity.ArchivedApp
 import io.github.muntashirakon.AppManager.logs.Logger
@@ -12,8 +18,13 @@ import io.github.muntashirakon.AppManager.types.UserPackagePair
 import io.github.muntashirakon.AppManager.utils.ContextUtils
 import io.github.muntashirakon.AppManager.utils.ShizukuUtils
 import io.github.muntashirakon.AppManager.settings.Ops
+import io.github.muntashirakon.AppManager.batchops.struct.BatchArchiveOptions
+import io.github.muntashirakon.AppManager.apk.installer.PackageInstallerCompat
 import kotlinx.coroutines.runBlocking
+import rikka.shizuku.Shizuku
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Archive Handler for app archiving operations
@@ -61,7 +72,16 @@ object ArchiveHandler {
                     val appName = appInfo.loadLabel(pm).toString()
                     val apkPath = appInfo.sourceDir
                     val size = File(apkPath).length()
-                    log(logger, "Archiving ${pair.packageName} size=$size bytes")
+                    
+                    // Retrieve existing tags if no new tags are provided in options
+                    val archiveOptions = info.options as? BatchArchiveOptions
+                    var tags = archiveOptions?.tags
+                    if (tags == null) {
+                        val app = AppsDb.getInstance().appDao().getByPackageNameSync(pair.packageName, pair.userId)
+                        tags = app?.tags
+                    }
+                    
+                    log(logger, "Archiving ${pair.packageName} size=$size bytes tags=$tags")
 
                     var success = false
 
@@ -79,31 +99,76 @@ object ArchiveHandler {
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
                         )
 
-                        packageInstaller.requestArchive(pair.packageName, pendingIntent.intentSender)
-                        success = true
-                    }
-                    // Shizuku
-                    else if ((mode == MODE_AUTO || mode == MODE_SHIZUKU) && shell != null) {
-                        val result = shell.runCommand("pm uninstall -k ${pair.packageName}")
-                        if (result?.exitCode == 0) {
+                        try {
+                            packageInstaller.requestArchive(pair.packageName, pendingIntent.intentSender)
                             success = true
-                        } else {
-                            log(logger, "====> op=ARCHIVE, pkg=$pair, exitCode=${result?.exitCode}, stderr=${result?.stderr}")
+                            log(logger, "====> Requested system archive for ${pair.packageName}")
+                        } catch (e: Exception) {
+                            log(logger, "====> System archive failed for ${pair.packageName}, falling back...", e)
                         }
                     }
-                    // Root
-                    else if (mode == MODE_ROOT || (mode == MODE_AUTO && Ops.isDirectRoot())) {
-                        val installer = PackageInstallerCompat.getNewInstance()
-                        success = installer.uninstall(pair.packageName, pair.userId, true)
+                    
+                    if (!success && (mode == MODE_AUTO || mode == MODE_SHIZUKU)) {
+                        if (ShizukuUtils.isShizukuAvailable()) {
+                            log(logger, "Trying Shizuku Native Acceleration for ${pair.packageName}")
+                            try {
+                                val binder = Shizuku.getBinder()
+                                if (binder != null) {
+                                    val ipm = IPackageManager.Stub.asInterface(Shizuku.newBinderSender(binder, "package"))
+                                    val latch = CountDownLatch(1)
+                                    var returnCode = -1
+                                    val observer = object : IPackageDeleteObserver2.Stub() {
+                                        override fun onUserActionRequired(intent: Intent?) {
+                                            latch.countDown()
+                                        }
+
+                                        override fun onPackageDeleted(packageName: String?, code: Int, msg: String?) {
+                                            returnCode = code
+                                            latch.countDown()
+                                        }
+                                    }
+                                    // DELETE_KEEP_DATA = 0x00000002
+                                    ipm.deletePackage(pair.packageName, observer, pair.userId, 0x00000002)
+                                    if (latch.await(10, TimeUnit.SECONDS) && (returnCode == 1 || returnCode == 0)) {
+                                        success = true
+                                        log(logger, "====> Shizuku Native Acceleration successful")
+                                    } else {
+                                        log(logger, "====> Shizuku Native failed or timed out: returnCode=$returnCode")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                log(logger, "====> Shizuku Native failed with exception", e)
+                            }
+                        }
+                        
+                        if (!success && shell != null) {
+                            log(logger, "Trying Shizuku Shell fallback for ${pair.packageName}")
+                            val result = shell.runCommand("pm uninstall -k ${pair.packageName}")
+                            if (result?.exitCode == 0) {
+                                success = true
+                                log(logger, "====> Shizuku Shell successful")
+                            } else {
+                                log(logger, "====> Shizuku Shell failed: exitCode=${result?.exitCode}, stderr=${result?.stderr}")
+                            }
+                        }
                     }
-                    // Standard
-                    else {
+
+                    if (!success && (mode == MODE_AUTO || mode == MODE_ROOT) && Ops.isDirectRoot()) {
+                        log(logger, "Trying Root archiving for ${pair.packageName}")
                         val installer = PackageInstallerCompat.getNewInstance()
                         success = installer.uninstall(pair.packageName, pair.userId, true)
+                        if (success) log(logger, "====> Root archive successful")
+                    }
+
+                    if (!success && (mode == MODE_AUTO || mode == MODE_STANDARD)) {
+                        log(logger, "Trying Standard archiving for ${pair.packageName}")
+                        val installer = PackageInstallerCompat.getNewInstance()
+                        success = installer.uninstall(pair.packageName, pair.userId, true)
+                        if (success) log(logger, "====> Standard archive successful")
                     }
 
                     if (success) {
-                        val archivedApp = ArchivedApp(pair.packageName, appName, System.currentTimeMillis(), apkPath)
+                        val archivedApp = ArchivedApp(pair.packageName, appName, System.currentTimeMillis(), apkPath, tags)
                         runBlocking { archivedAppDao.insert(archivedApp) }
                         log(logger, "====> Archived successfully")
                     } else {

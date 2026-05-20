@@ -40,6 +40,12 @@ class ArchivedAppsAdapter(
         } else {
             ""
         }
+        if (archivedApp.tags != null) {
+            holder.tags.visibility = View.VISIBLE
+            holder.tags.text = archivedApp.tags
+        } else {
+            holder.tags.visibility = View.GONE
+        }
         holder.restoreButton.setOnClickListener { listener(archivedApp) }
     }
 
@@ -54,7 +60,8 @@ class ArchivedAppsAdapter(
             override fun areContentsTheSame(oldPos: Int, newPos: Int) =
                 archivedApps[oldPos].packageName == newArchivedApps[newPos].packageName &&
                         archivedApps[oldPos].archiveTimestamp == newArchivedApps[newPos].archiveTimestamp &&
-                        archivedApps[oldPos].appName == newArchivedApps[newPos].appName
+                        archivedApps[oldPos].appName == newArchivedApps[newPos].appName &&
+                        archivedApps[oldPos].tags == newArchivedApps[newPos].tags
         })
         archivedApps = newArchivedApps
         diff.dispatchUpdatesTo(this)
@@ -64,6 +71,7 @@ class ArchivedAppsAdapter(
         val appName: TextView = view.findViewById(R.id.app_name)
         val packageName: TextView = view.findViewById(R.id.package_name)
         val archiveDate: TextView = view.findViewById(R.id.archive_date)
+        val tags: TextView = view.findViewById(R.id.tags)
         val restoreButton: Button = view.findViewById(R.id.restore_button)
     }
 }

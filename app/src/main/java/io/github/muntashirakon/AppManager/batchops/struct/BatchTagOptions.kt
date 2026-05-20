@@ -10,18 +10,15 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Archive options - simple and focused on archiving only
- * Cache and data cleaning are separate operations
+ * Tag options for batch tag editing
  */
 @Parcelize
-data class BatchArchiveOptions(
-    val mode: Int,
-    val tags: String? = null
+data class BatchTagOptions(
+    val tags: String?
 ) : IBatchOpOptions, Parcelable {
 
     @Throws(JSONException::class)
     constructor(jsonObject: JSONObject) : this(
-        mode = jsonObject.getInt("mode"),
         tags = if (jsonObject.has("tags")) jsonObject.getString("tags") else null
     ) {
         require(jsonObject.getString("tag") == TAG) { "Invalid tag" }
@@ -31,17 +28,16 @@ data class BatchArchiveOptions(
     override fun serializeToJson(): JSONObject {
         return JSONObject().apply {
             put("tag", TAG)
-            put("mode", mode)
             if (tags != null) put("tags", tags)
         }
     }
 
     companion object {
-        const val TAG = "BatchArchiveOptions"
+        const val TAG = "BatchTagOptions"
 
         @JvmField
         val DESERIALIZER = JsonDeserializer.Creator { jsonObject: JSONObject ->
-            BatchArchiveOptions(jsonObject)
+            BatchTagOptions(jsonObject)
         }
     }
 }

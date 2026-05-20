@@ -20,6 +20,9 @@ class ArchivedApp {
     @ColumnInfo(name = "apk_path")
     var apkPath: String? = null
 
+    @ColumnInfo(name = "tags")
+    var tags: String? = null
+
     constructor()
 
     @Ignore
@@ -35,5 +38,14 @@ class ArchivedApp {
         this.appName = appName
         this.archiveTimestamp = archiveTimestamp
         this.apkPath = apkPath
+    }
+
+    @Ignore
+    constructor(packageName: String, appName: String?, archiveTimestamp: Long, apkPath: String?, tags: String?) {
+        this.packageName = packageName
+        this.appName = appName
+        this.archiveTimestamp = archiveTimestamp
+        this.apkPath = apkPath
+        this.tags = tags
     }
 }
