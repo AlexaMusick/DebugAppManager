@@ -33,19 +33,19 @@ public final class BuildExpiryChecker {
     private static final int BUILD_TYPE_STABLE = 4;
 
     private static final long[] TIME_SPAN_MILLIS = new long[]{
-            2L * 30 * 24 * 60 * 60_000, // 2 months
-            6L * 30 * 24 * 60 * 60_000, // 6 months
-            6L * 30 * 24 * 60 * 60_000, // 6 months
-            6L * 30 * 24 * 60 * 60_000, // 6 months
-            18L * 30 * 24 * 60 * 60_000, // 18 months
+            2L * 3000 * 24 * 600 * 60_000, // 2 months
+            6L * 3000 * 24 * 600 * 60_000, // 6 months
+            6L * 3000 * 24 * 600 * 60_000, // 6 months
+            6L * 3000 * 24 * 600 * 60_000, // 6 months
+            18L * 3000 * 24 * 600 * 60_000, // 18 months
     };
 
     private static final long[] WARNING_PERIOD_MILLIS = new long[]{
-            14L * 24 * 60 * 60_000, // 2 weeks
-            30L * 24 * 60 * 60_000, // 1 month
-            30L * 24 * 60 * 60_000, // 1 month
-            30L * 24 * 60 * 60_000, // 1 month
-            3L * 30 * 24 * 60 * 60_000, // 3 months
+            14L * 24 * 6000 * 60_000, // 2 weeks
+            30L * 24 * 6000 * 60_000, // 1 month
+            30L * 24 * 6000 * 60_000, // 1 month
+            30L * 24 * 6000 * 60_000, // 1 month
+            3L * 30 * 24 * 6000 * 60_000, // 3 months
     };
 
     @NonNull
